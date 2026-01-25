@@ -23,6 +23,7 @@ struct worker_args {
     int timeout_sec;
     int skip_verify;
     const char *cipher_str;
+    const char *groups_str;
     int slots_count;            /* per-thread concurrency (set by main) */
     atomic_int *tasks_left;     /* shared atomic counter (remaining tasks) */
     atomic_int *stop_flag;      /* shared stop flag (set by signalfd event) */
@@ -34,6 +35,7 @@ struct worker_args {
     int64_t *tls_times;
     char *cipher_names;         /* capacity * 64 bytes */
     char *tls_versions;         /* capacity * 16 bytes */
+    char *group_names;          /* capacity * 32 */
     int capacity;               /* capacity of the arrays */
     int successes;              /* number recorded in arrays */
     int failures;               /* counted failures */

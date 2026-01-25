@@ -2,7 +2,7 @@
 #include <openssl/ssl.h>
 #include <stdio.h>
 
-SSL_CTX *create_thread_ctx(const char *cipher_str, int skip_verify)
+SSL_CTX *create_thread_ctx(const char *cipher_str, const char* groups_str, int skip_verify)
 {
     SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
     if (!ctx) return NULL;
@@ -19,6 +19,14 @@ SSL_CTX *create_thread_ctx(const char *cipher_str, int skip_verify)
             fprintf(stderr,
                     "Warning: SSL_CTX_set_cipher_list didn't match TLS1.2 suites for '%s'\n",
                     cipher_str);
+        }
+    }
+
+    /* TLS groups/curves (OpenSSL, Tongsuo, BoringSSL 均支持这个 API) */
+    if (groups_str && groups_str[0] != '\0') {
+        if (SSL_CTX_set1_groups_list(ctx, groups_str) != 1) {
+            fprintf(stderr,
+                    "Warning: failed to set groups '%s'\n", groups_str);
         }
     }
 

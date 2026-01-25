@@ -41,6 +41,7 @@ static void print_usage(const char *prog) {
         "  -k                     : skip certificate verification (INSECURE)\n"
         "  -s <servername>        : SNI / server name to send (useful when host is IP)\n"
         "  -C <ciphers>           : OpenSSL cipher list / TLS1.3 ciphersuites string\n"
+        "  -G <groups>            : TLS groups/curves list (e.g. \"X25519:P-256\"; BoringSSL: \"X25519MLKEM768:X25519\")\n"
         "  -A auto                : enable CPU affinity auto-binding (thread_id %% ncpus)\n"
         "  -h, --help             : show this help and exit\n"
         "  --version              : print version and exit\n\n"
@@ -67,6 +68,7 @@ main(int argc, char **argv)
     int timeout_sec = 5;
     int skip_verify = 0;
     char *cipher_str = NULL;
+    char *groups_str = NULL;
     int set_affinity_auto = 0;
 
     for (int i = 2; i < argc; ++i) {
@@ -86,6 +88,8 @@ main(int argc, char **argv)
             servername = argv[++i];
         else if ((strcmp(argv[i], "-C") == 0) && i + 1 < argc)
             cipher_str = argv[++i];
+        else if ((strcmp(argv[i], "-G") == 0) && i + 1 < argc)
+            groups_str = argv[++i];
         else if ((strcmp(argv[i], "-A") == 0) && i + 1 < argc) {
             if (strcmp(argv[i+1], "auto") == 0) {
                 set_affinity_auto = 1;
@@ -194,6 +198,7 @@ main(int argc, char **argv)
         wargs[i].timeout_sec = timeout_sec;
         wargs[i].skip_verify = skip_verify;
         wargs[i].cipher_str = cipher_str;
+        wargs[i].groups_str = groups_str;
         wargs[i].slots_count = slots_for_thread;
         wargs[i].tasks_left = &tasks_left;
         wargs[i].stop_flag = &stop_flag;
@@ -204,6 +209,7 @@ main(int argc, char **argv)
         wargs[i].conn_times = calloc((size_t)capacity, sizeof(int64_t));
         wargs[i].tls_times = calloc((size_t)capacity, sizeof(int64_t));
         wargs[i].cipher_names = calloc((size_t)capacity, 64);
+        wargs[i].group_names = calloc((size_t)capacity, 32);
         wargs[i].tls_versions = calloc((size_t)capacity, 16);
         wargs[i].successes = 0;
         wargs[i].failures = 0;
@@ -248,6 +254,7 @@ main(int argc, char **argv)
     int64_t *all_conn = calloc((size_t)count, sizeof(int64_t));
     int64_t *all_tls = calloc((size_t)count, sizeof(int64_t));
     char *all_ciphers = calloc((size_t)count, 64);
+    char *all_groups = calloc((size_t)count, 32);
     char *all_versions = calloc((size_t)count, 16);
     if (!all_conn || !all_tls || !all_ciphers || !all_versions) {
         perror("calloc all");
@@ -268,11 +275,14 @@ main(int argc, char **argv)
                    &wargs[i].cipher_names[j * 64], 64);
             memcpy(&all_versions[total_recorded * 16],
                    &wargs[i].tls_versions[j * 16], 16);
+            memcpy(&all_groups[total_recorded * 32],
+                   &wargs[i].group_names[j * 32], 32);
             total_recorded++;
         }
         free(wargs[i].conn_times);
         free(wargs[i].tls_times);
         free(wargs[i].cipher_names);
+        free(wargs[i].group_names);
         free(wargs[i].tls_versions);
     }
 
@@ -319,6 +329,8 @@ main(int argc, char **argv)
         struct kv { char name[64]; int cnt; };
         struct kv *ciphers = calloc(256, sizeof(struct kv));
         int ciphers_n = 0;
+        struct kv *groups = calloc(256, sizeof(struct kv));
+        int groups_n = 0;
         struct kv *vers = calloc(16, sizeof(struct kv));
         int vers_n = 0;
 
@@ -336,6 +348,22 @@ main(int argc, char **argv)
                     strncpy(ciphers[ciphers_n].name, c, 63);
                     ciphers[ciphers_n].cnt = 1;
                     ciphers_n++;
+                }
+            }
+
+            char *g = &all_groups[i * 32];
+            if (g && g[0]) {
+                int found = 0;
+                for (int k = 0; k < groups_n; ++k)
+                    if (strcmp(groups[k].name, g) == 0) {
+                        groups[k].cnt++;
+                        found = 1;
+                        break;
+                    }
+                if (!found) {
+                    strncpy(groups[groups_n].name, g, 63);
+                    groups[groups_n].cnt = 1;
+                    groups_n++;
                 }
             }
             char *v = &all_versions[i * 16];
@@ -359,11 +387,16 @@ main(int argc, char **argv)
         for (int i = 0; i < vers_n; ++i)
             printf("  %s : %d\n", vers[i].name, vers[i].cnt);
 
+        printf("\nGroup distribution (unique %d):\n", groups_n);
+        for (int i = 0; i < groups_n; ++i)
+            printf("  %s : %d\n", groups[i].name, groups[i].cnt);
+
         printf("\nCipher distribution (unique %d):\n", ciphers_n);
         for (int i = 0; i < ciphers_n; ++i)
             printf("  %s : %d\n", ciphers[i].name, ciphers[i].cnt);
 
         free(ciphers);
+        free(groups);
         free(vers);
     } else {
         printf("  no recorded successful handshakes\n");

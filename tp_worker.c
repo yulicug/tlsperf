@@ -97,6 +97,27 @@ record_sample(struct worker_args *w, int *pidx, int cap,
             w->tls_versions[idx * 16] = '\0';
         }
     }
+
+    if (w->group_names) {
+#if defined(OPENSSL_IS_BORINGSSL)
+        uint16_t group_id = SSL_get_curve_id(ssl);
+#else
+        int group_id = SSL_get_shared_group(ssl, 0);  /* 成功握手后 */
+#endif
+        const char *gname = NULL;
+        if (group_id > 0) {
+#if defined(OPENSSL_IS_BORINGSSL)
+            gname = SSL_get_curve_name(group_id);  /* BoringSSL: IANA group id -> 名称 */
+#else
+            gname = OBJ_nid2sn(group_id);          /* OpenSSL/Tongsuo: NID -> 短名称 */
+#endif
+        }
+        if (gname) {
+            strncpy(&w->group_names[idx * 32], gname, 31);
+        } else {
+            w->group_names[idx * 32] = '\0';
+        }
+    }
     (*pidx)++;
 }
 
@@ -459,7 +480,7 @@ worker_run(void *arg)
     cap = w->capacity;
     idx = 0;
 
-    ctx = create_thread_ctx(w->cipher_str, w->skip_verify);
+    ctx = create_thread_ctx(w->cipher_str, w->groups_str, w->skip_verify);
     if (!ctx) {
         fprintf(stderr, "thread %d: SSL_CTX_new failed\n", w->thread_id);
         goto out;
