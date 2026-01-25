@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <time.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -188,6 +189,9 @@ main(int argc, char **argv)
     int approx = (count + threads - 1) / threads;
     int capacity = approx + 16;
 
+    struct timespec ts_start, ts_end;
+    clock_gettime(CLOCK_MONOTONIC, &ts_start);
+
     for (int i = 0; i < threads; ++i) {
         int slots_for_thread = base_slots + (i < rem ? 1 : 0);
         wargs[i].thread_id = i;
@@ -288,6 +292,13 @@ main(int argc, char **argv)
 
     if (sfd >= 0)
         close(sfd);
+
+    clock_gettime(CLOCK_MONOTONIC, &ts_end);
+
+    double elapsed = (ts_end.tv_sec - ts_start.tv_sec) +
+                        (ts_end.tv_nsec - ts_start.tv_nsec) / 1e9;
+
+    double cps = elapsed > 0 ? total_success / elapsed : 0.0;
 
     printf("Target: %s:%d  total=%d  threads=%d  concurrency=%d  timeout=%ds"
            "  skip_verify=%s  sni=%s  ciphers=%s\n",
@@ -394,6 +405,8 @@ main(int argc, char **argv)
         printf("\nCipher distribution (unique %d):\n", ciphers_n);
         for (int i = 0; i < ciphers_n; ++i)
             printf("  %s : %d\n", ciphers[i].name, ciphers[i].cnt);
+
+        printf("\nElapsed: %.3f s, CPS (success): %.2f\n", elapsed, cps);
 
         free(ciphers);
         free(groups);
