@@ -55,6 +55,25 @@ target_link_libraries(tlsperf PRIVATE
     $<$<BOOL:${BORINGSSL_NEEDS_STDCXX}>:stdc++>  # BoringSSL is C++
 )
 
+add_executable(echcheck
+    echcheck.c
+)
+
+target_include_directories(echcheck PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${OpenSSL_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR}
+)
+
+target_compile_options(echcheck PRIVATE -Wall -Wextra -O2 -g)
+
+target_link_libraries(echcheck PRIVATE
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    pthread
+    ${CMAKE_DL_LIBS}
+    $<$<BOOL:${BORINGSSL_NEEDS_STDCXX}>:stdc++>
+)
+
 message(STATUS "Using OpenSSL Include: ${OpenSSL_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR}")
 message(STATUS "Using OpenSSL SSL lib: ${OPENSSL_SSL_LIBRARY}")
 message(STATUS "Using OpenSSL Crypto lib: ${OPENSSL_CRYPTO_LIBRARY}")
